@@ -60,11 +60,13 @@ private:
    TString   fBucket;      // Bucket name
    TString   fObjectKey;   // Object key
    TString   fTimeStamp;   // Request time stamp
+   TString   fTimeStamp2;   // Request time stamp
    TString   fAccessKey;   // Access key (for authentication)
    TString   fSecretKey;   // Secret key (for authentication)
 
 
 protected:
+   TString GetSHA256Hash(TString payload) const;
    TString HTTPVerbToTString(EHTTPVerb httpVerb) const;
    TString MakeRequestLine(TS3HTTPRequest::EHTTPVerb httpVerb) const;
    TString MakeAuthHeader(TS3HTTPRequest::EHTTPVerb httpVerb) const;

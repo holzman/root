@@ -255,6 +255,7 @@ Int_t TS3WebFile::GetHead()
    // file. Uses TS3HTTPRequest to generate an HTTP HEAD request which includes
    // the authorization header expected by the S3 server.
    fMsgGetHead = fS3Request.GetRequest(TS3HTTPRequest::kHEAD);
+   Info("BH", "head: %s", fMsgGetHead.Data());
    return TWebFile::GetHead();
 }
 

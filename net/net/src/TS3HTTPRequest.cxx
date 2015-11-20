@@ -88,6 +88,7 @@ TS3HTTPRequest::TS3HTTPRequest(const TS3HTTPRequest& r)
    fAccessKey = r.fAccessKey;  
    fSecretKey = r.fSecretKey;
    fTimeStamp = r.fTimeStamp;
+   fTimeStamp2 = r.fTimeStamp2;
 }
 
 //______________________________________________________________________________
@@ -103,9 +104,12 @@ TString TS3HTTPRequest::ComputeSignature(TS3HTTPRequest::EHTTPVerb httpVerb) con
    //    AMAZON  http://awsdocs.s3.amazonaws.com/S3/latest/s3-qrc.pdf
    //    GOOGLE: http://code.google.com/apis/storage/docs/reference/v1/developer-guidev1.html#authentication
 
+
    TString toSign = TString::Format("%s\n\n\n%s\n",  // empty Content-MD5 and Content-Type
                                     (const char*)HTTPVerbToTString(httpVerb),
                                     (const char*)fTimeStamp);
+
+   //   Info("ComputeSignature", "BH %s\n", toSign.Data());
    if (fAuthType == kGoogle) {
       // Must use API version 1. Google Storage API v2 only
       // accepts OAuth authentication.
@@ -150,16 +154,21 @@ TS3HTTPRequest& TS3HTTPRequest::SetTimeStamp()
    //   http://code.google.com/apis/storage/docs/reference-headers.html#date
 
    time_t now = time(NULL);
-   char result[128];
+   char result[128], result2[128];
 #ifdef _REENTRANT
    struct tm dateFormat;
    strftime(result, sizeof(result), "%a, %d %b %Y %H:%M:%S GMT",
       gmtime_r(&now, &dateFormat));
+   strftime(result2, sizeof(result2), "%Y%m%dT%H%M%SZ",
+      gmtime_r(&now, &dateFormat));
 #else
    strftime(result, sizeof(result), "%a, %d %b %Y %H:%M:%S GMT",
       gmtime(&now));
+   strftime(result2, sizeof(result2), "%Y%m%dT%H%M%SZ",
+      gmtime_r(&now, &dateFormat));	    
 #endif
    fTimeStamp = result;
+   fTimeStamp2 = result2;
    return *this;
 }
 
@@ -185,7 +194,7 @@ TString TS3HTTPRequest::MakeHostHeader() const
 {
    // Returns the 'Host' header to include in the HTTP request.
 
-   return "Host: " + fHost;
+   return "Host:" + fHost;
 }
 
 //______________________________________________________________________________
@@ -193,7 +202,7 @@ TString TS3HTTPRequest::MakeDateHeader() const
 {
    // Returns the date header for this HTTP request
 
-   return "Date: " + fTimeStamp;
+   return "Date:" + fTimeStamp2;
 }
 
 //______________________________________________________________________________
@@ -217,6 +226,15 @@ TString TS3HTTPRequest::MakeAuthHeader(TS3HTTPRequest::EHTTPVerb httpVerb) const
    if (fAuthType == kNoAuth)
       return "";
    
+   TString x = TString::Format("Authorization: %s %s:%s%s",
+      (const char*)MakeAuthPrefix(),
+      (const char*)fAccessKey,
+      (const char*)ComputeSignature(httpVerb),
+      (fAuthType == kGoogle) ? "\r\nx-goog-api-version: 1" : "");
+
+   Info("MakeAuthHeader", "\n%s", x.Data());
+   exit(1);
+     
    return TString::Format("Authorization: %s %s:%s%s",
       (const char*)MakeAuthPrefix(),
       (const char*)fAccessKey,
@@ -224,6 +242,28 @@ TString TS3HTTPRequest::MakeAuthHeader(TS3HTTPRequest::EHTTPVerb httpVerb) const
       (fAuthType == kGoogle) ? "\r\nx-goog-api-version: 1" : "");
 }
 
+TString TS3HTTPRequest::GetSHA256Hash(TString payload) const
+{
+  /*  
+   unsigned char *ibuf, obuf[32];
+   char hash[65];
+   SHA256(ibuf, 0, obuf);
+   for (int i=0; i<32; i++) {
+     sprintf(&hash[2*i], "%02x", obuf[i]);
+   }
+  */
+
+  unsigned char obuf[32];
+  char hash[65];
+  SHA256((unsigned char*) payload.Data(), payload.Length(), obuf);
+   for (int i=0; i<32; i++) {
+     sprintf(&hash[2*i], "%02x", obuf[i]);
+   }
+   
+   return TString(hash);
+}
+
+  
 //______________________________________________________________________________
 TString TS3HTTPRequest::GetRequest(TS3HTTPRequest::EHTTPVerb httpVerb, Bool_t appendCRLF)
 {
@@ -232,14 +272,43 @@ TString TS3HTTPRequest::GetRequest(TS3HTTPRequest::EHTTPVerb httpVerb, Bool_t ap
    // Set time stamp before computing this request's signature. The signature
    // includes the date.
    SetTimeStamp(); 
+   TString dateheader = MakeDateHeader();
+   TString hostheader = MakeHostHeader();
+   TString hash = GetSHA256Hash("");
    TString request = TString::Format("%s\r\n%s\r\n%s\r\n",
-      (const char*)MakeRequestLine(httpVerb),
-      (const char*)MakeHostHeader(),
-      (const char*)MakeDateHeader());
+				     (const char*)MakeRequestLine(httpVerb),
+				     (const char*)dateheader,
+				     (const char*)hostheader);
+
+
+   dateheader.ToLower();
+   hostheader.ToLower();
+   TString reqline = TString::Format("%s\r\n/%s%s\r\n\r\n%s\r\n%s\r\n\r\ndate;host\r\n%s",
+				     (const char*)HTTPVerbToTString(httpVerb),
+				     (const char*)fBucket,
+				     (const char*)fObjectKey,
+				     (const char*)dateheader,
+				     (const char*)hostheader,
+				     (const char*)hash);
+
+   //  TString signingString = 
+   //     TString::Format("%s\n%s\n%s\n%s",
+   //     (const char*)fTimeStamp2 
+   //   reqline = reqline.Strip(TString::kTrailing, '\n');
+   //   Info("BH GetRequest req", "\n%s", request.Data());
+   Info("BH getrequest reqline ", "---%s---\n", reqline.Data());
+
+   exit(1);
+   request = "GET /?foo=Zoo&foo=aha http/1.1\nDate:Mon, 09 Sep 2011 23:36:00 GMT\nHost:host.foo.com\n";
+
+   Info("BH GetRequest", "\n%s", request.Data());
    TString authHeader = MakeAuthHeader(httpVerb);
    if (!authHeader.IsNull())
       request += authHeader + "\r\n";
    if (appendCRLF)
       request += "\r\n";
    return request;
+
+   Info("BH", "gr: %s", request.Data());
+
 }

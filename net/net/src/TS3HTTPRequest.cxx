@@ -176,9 +176,8 @@ TS3HTTPRequest& TS3HTTPRequest::SetTimeStamp()
 
 TString TS3HTTPRequest::MakeRequestLine(TS3HTTPRequest::EHTTPVerb httpVerb) const
 {
-   return TString::Format("%s /%s%s HTTP/1.1",
+   return TString::Format("%s %s HTTP/1.1",
                           (const char*)HTTPVerbToTString(httpVerb),
-                          (const char*)fBucket,
                           (const char*)fObjectKey);
 }
 
@@ -187,7 +186,7 @@ TString TS3HTTPRequest::MakeRequestLine(TS3HTTPRequest::EHTTPVerb httpVerb) cons
 
 TString TS3HTTPRequest::MakeHostHeader() const
 {
-   return "Host: " + fHost;
+   return TString::Format("Host: %s.%s", (const char*)fBucket, (const char*)fHost);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

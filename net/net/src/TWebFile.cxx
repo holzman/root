@@ -22,6 +22,7 @@
 #include "TROOT.h"
 #include "TSocket.h"
 #include "Bytes.h"
+#include "TEnv.h"
 #include "TError.h"
 #include "TSystem.h"
 #include "TBase64.h"
@@ -206,6 +207,18 @@ void TWebFile::Init(Bool_t readHeadOnly)
    fSize       = -1;
    fHasModRoot = kFALSE;
    fHTTP11     = kFALSE;
+
+   TString retryEnv  = gSystem->Getenv("ROOT_TWEBFILE_RETRIES");
+   if (!retryEnv.IsNull())
+     fRetries = retryEnv.Atoi();
+   else
+     fRetries = gEnv->GetValue("TWebFile.Root.Retries", 0);
+
+   TString sleepIntervalEnv = gSystem->Getenv("ROOT_TWEBFILE_SLEEPINTERVAL");
+   if (!sleepIntervalEnv.IsNull())
+     fSleepInterval = sleepIntervalEnv.Atoi();
+   else
+     fSleepInterval = gEnv->GetValue("TWebFile.Root.SleepInterval", 0);
 
    SetMsgReadBuffer10();
 
@@ -456,7 +469,18 @@ Bool_t TWebFile::ReadBuffer10(char *buf, Int_t len)
    msg += fOffset+len-1;
    msg += "\r\n\r\n";
 
-   Int_t n = GetFromWeb10(buf, len, msg);
+   Int_t ntry = 0;
+   Int_t delay = fSleepInterval;
+
+   Int_t n = 0;
+   while (ntry++ <= fRetries) {
+     n = GetFromWeb10(buf, len, msg);
+     if (n == 0) break;
+
+     Info("ReadBuffer10", "Failed read (%d/%d), sleeping %d ms", ntry, fRetries, delay);
+     gSystem->Sleep(delay*=2);
+   }
+
    if (n == -1)
       return kTRUE;
    // The -2 error condition typically only happens when

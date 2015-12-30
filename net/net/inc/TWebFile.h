@@ -58,6 +58,9 @@ protected:
    TUrl              fUrlOrg;           // save original url in case of temp redirection
    TString           fBasicUrlOrg;      // save original url in case of temp redirection
 
+   Int_t             fRetries;          // number of retries on failed read
+   Int_t             fSleepInterval;    // sleep interval between tries (exponential backoff)
+
    static TUrl       fgProxy;           // globally set proxy URL
 
    virtual void        Init(Bool_t readHeadOnly);
@@ -90,7 +93,7 @@ public:
    static void        SetProxy(const char *url);
    static const char *GetProxy();
 
-   ClassDef(TWebFile,2)  //A ROOT file that reads via a http server
+   ClassDef(TWebFile,3)  //A ROOT file that reads via a http server
 };
 
 
